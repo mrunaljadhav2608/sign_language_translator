@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Sign Language ↔ Speech Translator</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="wrap">
+    <h1>✧ Sign Language ↔ Speech Translator ✧</h1>
+    <p class="subtitle">a real-time, two-way gesture & voice bridge</p>
+
+    <div class="toggle-row">
+      <button id="btn-sign" class="mode-btn active" onclick="setMode('sign')">🖐️ Sign → Speech</button>
+      <button id="btn-speech" class="mode-btn" onclick="setMode('speech')">🎙️ Speech → Sign</button>
+    </div>
+
+    <div class="video-card">
+      <img id="video" src="{{ url_for('video_feed') }}" alt="live feed">
+    </div>
+
+    <div class="confidence-row" id="confidence-row">
+      <div class="confidence-label">Confidence</div>
+      <div class="confidence-track">
+        <div class="confidence-fill" id="confidence-fill" style="width: 0%"></div>
+      </div>
+      <div class="confidence-value" id="confidence-value">0%</div>
+    </div>
+
+    <div id="speech-controls" class="speech-controls hidden">
+      <button id="listen-btn" onclick="startListening()">🎤 Listen</button>
+      <p class="hint">Known words: {{ known_words | join(', ') if known_words else 'none recorded yet' }}</p>
+    </div>
+
+    <div class="status-card">
+      <div class="status-label" id="status-label">Idle</div>
+      <div class="recognized-text" id="recognized-text">—</div>
+    </div>
+
+    <div class="history-card">
+      <div class="history-header">
+        <span>Session History</span>
+        <a href="/download_history" class="download-link">⬇ download</a>
+      </div>
+      <ul id="history-list" class="history-list"></ul>
+    </div>
+  </div>
+
+<script>
+let currentMode = "sign";
+
+function setMode(mode) {
+  currentMode = mode;
+  document.getElementById('btn-sign').classList.toggle('active', mode === 'sign');
+  document.getElementById('btn-speech').classList.toggle('active', mode === 'speech');
+  document.getElementById('speech-controls').classList.toggle('hidden', mode !== 'speech');
+  document.getElementById('confidence-row').classList.toggle('hidden', mode !== 'sign');
+  fetch('/set_mode', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({mode: mode})
+  });
+}
+
+function startListening() {
+  fetch('/listen', {method: 'POST'});
+}
+
+function poll() {
+  fetch('/status').then(r => r.json()).then(data => {
+    document.getElementById('status-label').innerText = data.status;
+    document.getElementById('recognized-text').innerText = data.recognized_text || '—';
+    document.getElementById('listen-btn').disabled = data.listening;
+
+    const pct = Math.round((data.confidence || 0) * 100);
+    document.getElementById('confidence-fill').style.width = pct + '%';
+    document.getElementById('confidence-value').innerText = pct + '%';
+
+    const list = document.getElementById('history-list');
+    list.innerHTML = '';
+    (data.history || []).forEach(h => {
+      const li = document.createElement('li');
+      li.innerHTML = `<span class="hist-time">${h.time}</span> <span class="hist-dir">${h.direction}</span> — ${h.text}`;
+      list.appendChild(li);
+    });
+  });
+}
+setInterval(poll, 700);
+</script>
+</body>
+</html>
